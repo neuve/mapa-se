@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Red de Terapeutas SE</title>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-86GVQ5M3GN"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-86GVQ5M3GN');
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -317,7 +325,7 @@
   <div class="filters">
     <div class="filter-group">
       <span class="filter-label">Modalidad</span>
-      <select id="filterModalidad" onchange="applyFilters()">
+      <select id="filterModalidad" onchange="trackFilter('modalidad', this.value); applyFilters()">
         <option value="">Todas</option>
         <option value="Online">Online</option>
         <option value="Presencial">Presencial</option>
@@ -326,13 +334,13 @@
     </div>
     <div class="filter-group">
       <span class="filter-label">Ciudad</span>
-      <select id="filterCiudad" onchange="applyFilters()">
+      <select id="filterCiudad" onchange="trackFilter('ciudad', this.value); applyFilters()">
         <option value="">Todas</option>
       </select>
     </div>
     <div class="filter-group">
       <span class="filter-label">Idioma</span>
-      <select id="filterIdioma" onchange="applyFilters()">
+      <select id="filterIdioma" onchange="trackFilter('idioma', this.value); applyFilters()">
         <option value="">Todos</option>
         <option value="Inglés">Inglés</option>
         <option value="Francés">Francés</option>
@@ -343,7 +351,7 @@
     </div>
     <div class="filter-group">
       <span class="filter-label">Nivel SE</span>
-      <select id="filterNivel" onchange="applyFilters()">
+      <select id="filterNivel" onchange="trackFilter('nivel_se', this.value); applyFilters()">
         <option value="">Todos</option>
         <option value="Estudiante">Estudiante</option>
         <option value="Graduadx">Graduadx</option>
@@ -1019,9 +1027,9 @@ function crearPopup(t) {
       ${t.tel ? `
       <div class="popup-section">
         <div class="popup-section-label">Contacto</div>
-        <div class="popup-section-value">📞 <a href="tel:${t.tel}" style="color:var(--sage);text-decoration:none;">${t.tel}</a></div>
+        <div class="popup-section-value">📞 <a href="tel:${t.tel}" onclick="gtag('event','clic_telefono',{nombre:'${t.nombre.replace(/'/g,"\\'")}'})" style="color:var(--sage);text-decoration:none;">${t.tel}</a></div>
       </div>` : ''}
-      ${webUrl ? `<a href="${webUrl}" target="_blank" class="popup-link">🌐 Visitar sitio web ↗</a>` : ''}
+      ${webUrl ? `<a href="${webUrl}" target="_blank" class="popup-link" onclick="gtag('event','clic_web',{nombre:'${t.nombre.replace(/'/g,"\\'")}',url:'${webUrl}'})">🌐 Visitar sitio web ↗</a>` : ''}
     </div>
   `;
 }
@@ -1036,6 +1044,12 @@ function crearMarcador(t, index) {
 
   marker.on('click', () => {
     activarItem(index);
+    gtag('event', 'clic_terapeuta', {
+      nombre: t.nombre,
+      ciudad: t.ciudad,
+      nivel: t.nivel || 'sin nivel',
+      fuente: 'pin_mapa'
+    });
   });
 
   return marker;
@@ -1110,8 +1124,12 @@ function agregarALista(t, index) {
   `;
   el.onclick = () => {
     activarItem(index);
-    markers[markers.indexOf(markers.find((_, mi) => terapeutas[index] === terapeutas[index]))];
-    // Find and open the correct marker
+    gtag('event', 'clic_terapeuta', {
+      nombre: t.nombre,
+      ciudad: t.ciudad,
+      nivel: t.nivel || 'sin nivel',
+      fuente: 'lista_lateral'
+    });
     const allVisible = [...document.querySelectorAll('.therapist-item')];
     const pos = allVisible.indexOf(el);
     if (markers[pos]) {
@@ -1120,6 +1138,11 @@ function agregarALista(t, index) {
     }
   };
   container.appendChild(el);
+}
+
+function trackFilter(tipo, valor) {
+  if (!valor) return;
+  gtag('event', 'uso_filtro', { tipo_filtro: tipo, valor_filtro: valor });
 }
 
 // Init
