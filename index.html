@@ -125,6 +125,50 @@
     z-index: 1;
   }
 
+  /* Loading overlay */
+  #loading-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(44, 59, 45, 0.85);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  #loading-overlay.hidden { display: none; }
+
+  .loading-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.4rem;
+    color: var(--cream);
+    font-weight: 300;
+  }
+
+  .loading-sub {
+    font-size: 0.8rem;
+    color: var(--gold);
+    text-align: center;
+  }
+
+  .loading-bar-wrap {
+    width: 260px;
+    height: 4px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .loading-bar {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+
   /* Sidebar */
   .sidebar {
     width: 340px;
@@ -283,7 +327,6 @@
 
   .popup-link:hover { color: var(--terracotta); }
 
-  /* Custom marker */
   .custom-marker {
     width: 32px;
     height: 32px;
@@ -291,17 +334,6 @@
     transform: rotate(-45deg);
     border: 2px solid white;
     box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .marker-inner {
-    width: 12px;
-    height: 12px;
-    background: white;
-    border-radius: 50%;
-    transform: rotate(45deg);
   }
 
   .no-results {
@@ -319,6 +351,12 @@
 </style>
 </head>
 <body>
+
+<div id="loading-overlay">
+  <div class="loading-title">Red <span style="color:var(--gold);font-style:italic">SE</span> México</div>
+  <div class="loading-sub" id="loading-msg">Cargando terapeutas...</div>
+  <div class="loading-bar-wrap"><div class="loading-bar" id="loading-bar"></div></div>
+</div>
 
 <header>
   <div class="header-title">Red <span>SE</span> México</div>
@@ -360,7 +398,7 @@
         <option value="Proveedorx">Proveedorx</option>
       </select>
     </div>
-    <span class="counter" id="counter">Cargando...</span>
+    <span class="counter" id="counter">—</span>
   </div>
 </header>
 
@@ -369,7 +407,7 @@
   <div class="sidebar">
     <div class="sidebar-header">
       <div class="sidebar-title">Terapeutas</div>
-      <div class="sidebar-sub" id="sidebar-sub">Selecciona un pin para ver detalles</div>
+      <div class="sidebar-sub" id="sidebar-sub">Haz clic en un pin o en un nombre</div>
     </div>
     <div class="list-container" id="list-container"></div>
   </div>
@@ -378,581 +416,46 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // ============================================================
-// DATOS — geocodificados manualmente desde las direcciones
+// CONFIG
 // ============================================================
-const terapeutas = [
-  {
-    nombre: "Alfa Minerva Flores Castañón",
-    tel: "5544916343",
-    web: "https://www.innervision-mindfulness.com/",
-    casos: "Individual Adult@s, Pareja, Familia",
-    modalidad: "Online, Presencial",
-    ubicacion: "San Jerónimo Aculco, CDMX",
-    ciudad: "CDMX",
-    idiomas: "",
-    especialidad: "Mindfulness, Neuroeducación emocional, Soft Skills",
-    nivel: "Estudiante",
-    lat: 19.3107, lng: -99.2025
-  },
-  {
-    nombre: "Ana Elena Avalos Bosque",
-    tel: "5541438220",
-    web: "",
-    casos: "Individual Adult@s",
-    modalidad: "Online",
-    ubicacion: "Cuajimalpa, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Terapia Psicocorporal, BodyMindMovement, CraneoSacral, Polaridad",
-    nivel: "Practicante certificadx",
-    lat: 19.3591, lng: -99.2923
-  },
-  {
-    nombre: "Aurelia Dubouloz",
-    tel: "+525527202645",
-    web: "https://issara-aurelia.com",
-    casos: "Individual Adult@s, Adolescentes, Niños",
-    modalidad: "Online, Presencial",
-    ubicacion: "Coatepec, Veracruz",
-    ciudad: "Veracruz",
-    idiomas: "Francés, Inglés",
-    especialidad: "Abusos, accidentes, duelos",
-    nivel: "Proveedorx",
-    lat: 19.4522, lng: -96.9678
-  },
-  {
-    nombre: "Brenda Crowley Vázquez",
-    tel: "9981432611",
-    web: "",
-    casos: "Individual Adult@s, Adolescentes",
-    modalidad: "Online, Presencial",
-    ubicacion: "Cancún, Quintana Roo",
-    ciudad: "Cancún",
-    idiomas: "",
-    especialidad: "Psiconeuroaromaterapia y Gestalt",
-    nivel: "",
-    lat: 21.1619, lng: -86.8515
-  },
-  {
-    nombre: "Camila Apaez Rubio",
-    tel: "3317126059",
-    web: "https://heliotropismo.squarespace.com/",
-    casos: "Individual Adult@s",
-    modalidad: "Online, Presencial",
-    ubicacion: "Coatepec, Veracruz",
-    ciudad: "Veracruz",
-    idiomas: "Inglés",
-    especialidad: "Psicoterapia interdisciplinar, SE, acompañamiento hormonal, BodyMindMovement",
-    nivel: "",
-    lat: 19.4580, lng: -96.9700
-  },
-  {
-    nombre: "Casandra Macias Vega",
-    tel: "8712314686",
-    web: "",
-    casos: "Individual, Pareja, Familia, Adolescentes",
-    modalidad: "Online, Presencial",
-    ubicacion: "Gómez Palacio, Durango",
-    ciudad: "Durango",
-    idiomas: "",
-    especialidad: "Psicoterapia corporal integrativa, familiar sistémica",
-    nivel: "Estudiante",
-    lat: 25.5672, lng: -103.4996
-  },
-  {
-    nombre: "Cynthia Huerta",
-    tel: "5518503435",
-    web: "abondance.mx",
-    casos: "Individual Adult@s, Pareja",
-    modalidad: "Online, Presencial",
-    ubicacion: "Bosques de las Lomas, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Terapia psicocorporal integrativa, gestalt, openfloor therapy in motion",
-    nivel: "",
-    lat: 19.3950, lng: -99.2720
-  },
-  {
-    nombre: "Elsa Peralta",
-    tel: "551507729",
-    web: "",
-    casos: "Individual Adult@s",
-    modalidad: "Online, Presencial",
-    ubicacion: "Coyoacán, CDMX",
-    ciudad: "CDMX",
-    idiomas: "",
-    especialidad: "Cráneo sacro, masaje, integración psicodélica, embarazo y posparto",
-    nivel: "",
-    lat: 19.3467, lng: -99.1617
-  },
-  {
-    nombre: "Erika Vértiz Deuchler",
-    tel: "5554077651",
-    web: "",
-    casos: "Individual Adult@s",
-    modalidad: "Online, Presencial",
-    ubicacion: "Cuajimalpa, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Movimiento y Desarrollo Somático, Mindful Eating, TCA e imagen corporal",
-    nivel: "",
-    lat: 19.3620, lng: -99.3000
-  },
-  {
-    nombre: "Gabriel Palafox Rebollar",
-    tel: "+1-713-409-6198",
-    web: "",
-    casos: "Individual Adult@s, Adolescentes",
-    modalidad: "Online, Presencial",
-    ubicacion: "Las Águilas, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "",
-    nivel: "",
-    lat: 19.3250, lng: -99.2310
-  },
-  {
-    nombre: "Heather Anne Harper",
-    tel: "+525591952651",
-    web: "www.heatheranneharper.com",
-    casos: "Individual Adult@s, Familia, Adolescentes",
-    modalidad: "Online, Presencial",
-    ubicacion: "Coyoacán, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Herbolaria, terapeuta somática de trauma, estudio de la biografía",
-    nivel: "",
-    lat: 19.3490, lng: -99.1650
-  },
-  {
-    nombre: "Hilda Martínez Vega",
-    tel: "5511957245",
-    web: "",
-    casos: "Individual Adult@s",
-    modalidad: "Online, Presencial",
-    ubicacion: "Tequisquiapan, Querétaro",
-    ciudad: "Querétaro",
-    idiomas: "",
-    especialidad: "Osteopatía visceral y neural, terapia Craneosacral, terapia Manual Polivagal",
-    nivel: "Practicante certificadx",
-    lat: 20.5225, lng: -99.8939
-  },
-  {
-    nombre: "Ingrid Irene Borja Gutierrez",
-    tel: "3318942750",
-    web: "",
-    casos: "Adolescentes",
-    modalidad: "Presencial",
-    ubicacion: "Guadalajara y Zapopan, Jalisco",
-    ciudad: "Guadalajara",
-    idiomas: "",
-    especialidad: "Maestría en Terapia Familiar Sistémica",
-    nivel: "",
-    lat: 20.6597, lng: -103.3496
-  },
-  {
-    nombre: "Julieta Huerta Sámano",
-    tel: "5591852018",
-    web: "",
-    casos: "Individual Adult@s",
-    modalidad: "Online, Presencial",
-    ubicacion: "Bosques de las Lomas / Santa Fe, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Enfoque Gestalt, Desarrollo Humano",
-    nivel: "",
-    lat: 19.3920, lng: -99.2680
-  },
-  {
-    nombre: "Kersti Estrada Alcántara",
-    tel: "554484462",
-    web: "",
-    casos: "Individual Adult@s, Pareja, Familia, Adolescentes, Niños",
-    modalidad: "Online, Presencial",
-    ubicacion: "Zona norte, Aragón, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Español",
-    especialidad: "Médico general, biodescodificación, crianza, Gestalt, TDAH",
-    nivel: "Facilitadorx",
-    lat: 19.4794, lng: -99.0948
-  },
-  {
-    nombre: "Luis Sierra Suárez",
-    tel: "5556064918",
-    web: "ortopediadeportiva.com.mx",
-    casos: "Individual Adult@s",
-    modalidad: "Online, Presencial",
-    ubicacion: "Hospital Médica Sur, Tlalpan, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Ortopedia, traumatología, lesiones deportivas y artroscopia",
-    nivel: "",
-    lat: 19.3020, lng: -99.1620
-  },
-  {
-    nombre: "Mar Amaral",
-    tel: "5534181924",
-    web: "www.gestaltexistencial.com",
-    casos: "Individual Adult@s, Pareja",
-    modalidad: "Online, Presencial",
-    ubicacion: "San Miguel Chapultepec / Condesa, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés, Francés, Portugués",
-    especialidad: "Gestalt, Análisis Existencial, ansiedad, trauma, duelos, pareja",
-    nivel: "",
-    lat: 19.4111, lng: -99.1836
-  },
-  {
-    nombre: "María de la Paz Perez Cárcova",
-    tel: "2224264996",
-    web: "",
-    casos: "Individual Adult@s, Pareja, Familia, Adolescentes, Niños",
-    modalidad: "Online, Presencial",
-    ubicacion: "Puebla Centro, Puebla",
-    ciudad: "Puebla",
-    idiomas: "",
-    especialidad: "Gestalt, familiar sistémico, corporal, tanatología",
-    nivel: "",
-    lat: 19.0414, lng: -98.2063
-  },
-  {
-    nombre: "Maria del Pilar Martinez Rosas",
-    tel: "9581034812",
-    web: "",
-    casos: "Individual Adult@s",
-    modalidad: "Online, Presencial",
-    ubicacion: "Polanco, CDMX / Mazunte, Oaxaca",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Terapia Cráneo Sacral",
-    nivel: "Practicante certificadx",
-    lat: 19.4340, lng: -99.1975
-  },
-  {
-    nombre: "María Fernanda Ramírez Castillo",
-    tel: "5525640923",
-    web: "",
-    casos: "Individual Adult@s, Adolescentes, Niños",
-    modalidad: "Online, Presencial",
-    ubicacion: "Valle de Bravo, Estado de México",
-    ciudad: "Estado de México",
-    idiomas: "Francés, Inglés",
-    especialidad: "Crianza, Disciplina Positiva, Teoría Polivagal",
-    nivel: "Graduadx",
-    lat: 19.1923, lng: -100.1299
-  },
-  {
-    nombre: "María Kiekari",
-    tel: "+522283053710",
-    web: "www.mariakiekari.com",
-    casos: "Individual Adult@s, Pareja, Familia",
-    modalidad: "Online, Presencial",
-    ubicacion: "Xico / Coatepec, Veracruz",
-    ciudad: "Veracruz",
-    idiomas: "Inglés",
-    especialidad: "Trauma prenatal y perinatal, NeuroAffective Touch, Psicología Transpersonal Jungiana",
-    nivel: "Facilitadorx",
-    lat: 19.4189, lng: -97.0046
-  },
-  {
-    nombre: "Mayra Fernanda Chávez Leal",
-    tel: "+528116112833",
-    web: "MayraChavez.com",
-    casos: "Individual Adult@s",
-    modalidad: "Online, Presencial",
-    ubicacion: "San Pedro Garza García, Monterrey",
-    ciudad: "Monterrey",
-    idiomas: "Inglés",
-    especialidad: "Psicoterapia Psicoanalítica, EMDR Somático, IFS, Sensorimotor",
-    nivel: "Estudiante",
-    lat: 25.6597, lng: -100.3920
-  },
-  {
-    nombre: "Myrna Alcántara",
-    tel: "+525534438952",
-    web: "psicoterapiasomatica.com",
-    casos: "Individual Adult@s, Adolescentes",
-    modalidad: "Online",
-    ubicacion: "Santa Fe, CDMX / Málaga, España",
-    ciudad: "CDMX",
-    idiomas: "Inglés, Italiano, Alemán",
-    especialidad: "SE, Neuroaffective Touch, IFS, Biología del trauma",
-    nivel: "",
-    lat: 19.3560, lng: -99.2590
-  },
-  {
-    nombre: "Nancy Mancera",
-    tel: "5534906352",
-    web: "",
-    casos: "Individual Adult@s",
-    modalidad: "Online, Presencial",
-    ubicacion: "San Ángel / Las Águilas, CDMX",
-    ciudad: "CDMX",
-    idiomas: "",
-    especialidad: "Psicoterapia Gestalt, RESONANCE REPATTERNING, Integración Emocional",
-    nivel: "Estudiante",
-    lat: 19.3380, lng: -99.1980
-  },
-  {
-    nombre: "Paloma Arrigunaga de la Mora",
-    tel: "+1-832-641-0760",
-    web: "",
-    casos: "Individual Adult@s",
-    modalidad: "Online, Presencial",
-    ubicacion: "Las Águilas, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Barras de Access",
-    nivel: "",
-    lat: 19.3270, lng: -99.2280
-  },
-  {
-    nombre: "Patricio Ruiz Abrín",
-    tel: "5532020488",
-    web: "www.patricioruiz.mx",
-    casos: "Individual Adult@s, Pareja, Familia, Adolescentes",
-    modalidad: "Online, Presencial",
-    ubicacion: "Nápoles, Benito Juárez, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Core Energética, Terapia Familiar Sistémica",
-    nivel: "Facilitadorx",
-    lat: 19.3900, lng: -99.1760
-  },
-  {
-    nombre: "Patty Bueno",
-    tel: "+525513844085",
-    web: "www.pattybueno.com",
-    casos: "Individual Adult@s, Pareja, Familia",
-    modalidad: "Online, Presencial",
-    ubicacion: "Bosques de las Lomas / Interlomas, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Duelo, acompañamiento de enfermos terminales",
-    nivel: "",
-    lat: 19.3990, lng: -99.2750
-  },
-  {
-    nombre: "Regina Verduzco Gallo",
-    tel: "5514522193",
-    web: "",
-    casos: "Individual Adult@s, Adolescentes, Niños",
-    modalidad: "Online, Presencial",
-    ubicacion: "San Ángel, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Español",
-    especialidad: "Terapia Craneosacral",
-    nivel: "Facilitadorx",
-    lat: 19.3440, lng: -99.1940
-  },
-  {
-    nombre: "Renata Braun",
-    tel: "5512347099",
-    web: "",
-    casos: "Individual Adult@s, Pareja, Familia, Adolescentes",
-    modalidad: "Online, Presencial",
-    ubicacion: "CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés, Italiano, Francés",
-    especialidad: "Thetahealing, constelaciones familiares, NMG, Breathwork, mindfulness, hipnosis, PNL",
-    nivel: "Practicante certificadx",
-    lat: 19.3700, lng: -99.1640
-  },
-  {
-    nombre: "Sandra Casale",
-    tel: "8712639243",
-    web: "",
-    casos: "Individual Adult@s, Adolescentes",
-    modalidad: "Online, Presencial",
-    ubicacion: "Torreón, Coahuila",
-    ciudad: "Torreón",
-    idiomas: "",
-    especialidad: "Terapia craneosacral, voz y movimiento",
-    nivel: "",
-    lat: 25.5433, lng: -103.4068
-  },
-  {
-    nombre: "Sven Doehnee",
-    tel: "5554324868",
-    web: "sven@svendoehner.com",
-    casos: "Individual Adult@s, Familia, Adolescentes",
-    modalidad: "Online, Presencial",
-    ubicacion: "Oaxaca de Juárez, Oaxaca",
-    ciudad: "Oaxaca",
-    idiomas: "Inglés, Portugués",
-    especialidad: "Psicoanalista Junguiano, BodyMindMovement, Sueños y la Voz",
-    nivel: "",
-    lat: 17.0669, lng: -96.7203
-  },
-  {
-    nombre: "Yatra A. Angeletti",
-    tel: "+529851096787",
-    web: "",
-    casos: "Individual Adult@s, Pareja",
-    modalidad: "Online, Presencial",
-    ubicacion: "Tepoztlán, Morelos / Cholula, Puebla",
-    ciudad: "Morelos",
-    idiomas: "Inglés, Alemán, Italiano",
-    especialidad: "Learning Love®, craneosacral biodinámica, técnicas ancestrales",
-    nivel: "Facilitadorx",
-    lat: 18.9852, lng: -99.0980
-  },
-  {
-    nombre: "Gabina Villagrán Vázquez",
-    tel: "5535537819",
-    web: "",
-    casos: "Individual Adult@s",
-    modalidad: "Online",
-    ubicacion: "Ciudad Universitaria, Coyoacán, CDMX",
-    ciudad: "CDMX",
-    idiomas: "",
-    especialidad: "Hakomi, Cultivating Emotional Balance, Compasión Basada en la Cognición",
-    nivel: "Proveedorx",
-    lat: 19.3310, lng: -99.1850
-  },
-  {
-    nombre: "Daniela Chávez Heres",
-    tel: "5539992853",
-    web: "https://www.lasaludestaenti.com/",
-    casos: "Individual, Pareja, Familia",
-    modalidad: "Online, Presencial",
-    ubicacion: "Zona Sur-San Ángel, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Español",
-    especialidad: "Sistémico, Terapia Cráneo Sacral, Zhineng Qi Gong",
-    nivel: "Facilitadorx",
-    lat: 19.3450, lng: -99.1960
-  },
-  {
-    nombre: "Daniela García Moreno",
-    tel: "5543787502",
-    web: "https://encalmamx.com/",
-    casos: "Individual Adult@s, Adolescentes, Niños",
-    modalidad: "Online, Presencial",
-    ubicacion: "Ciudad de los Deportes, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Modelo relacional DIR Floortime, enfoque integrativo",
-    nivel: "Estudiante",
-    lat: 19.3760, lng: -99.1680
-  },
-  {
-    nombre: "Alejandra Sánchez Ramos",
-    tel: "9991854455",
-    web: "",
-    casos: "Individual Adult@s, Adolescentes, Niños",
-    modalidad: "Online, Presencial",
-    ubicacion: "Mérida, Yucatán",
-    ciudad: "Mérida",
-    idiomas: "Inglés",
-    especialidad: "Terapias energéticas",
-    nivel: "Practicante certificadx",
-    lat: 20.9674, lng: -89.5926
-  },
-  {
-    nombre: "Martha Elena Morales Muñoz",
-    tel: "6563382436",
-    web: "",
-    casos: "Individual Adult@s",
-    modalidad: "Presencial",
-    ubicacion: "Ciudad Juárez, Chihuahua",
-    ciudad: "Ciudad Juárez",
-    idiomas: "",
-    especialidad: "Gestalt, Biodescodificación, Alba Emoting, Brain Gym",
-    nivel: "Estudiante",
-    lat: 31.7300, lng: -106.4850
-  },
-  {
-    nombre: "Isabel de la Rosa",
-    tel: "5591955329",
-    web: "",
-    casos: "Individual Adult@s",
-    modalidad: "Online, Presencial, A domicilio",
-    ubicacion: "Del Valle, CDMX",
-    ciudad: "CDMX",
-    idiomas: "",
-    especialidad: "Gestalt, Desarrollo Humano, Sexualidad, Mindfulness, Terapia Narrativa",
-    nivel: "Estudiante",
-    lat: 19.3802, lng: -99.1613
-  },
-  {
-    nombre: "María Esther Oliva",
-    tel: "5511839908",
-    web: "www.resuelvetrauma.com",
-    casos: "Individual, Familia",
-    modalidad: "Online, Presencial, A domicilio",
-    ubicacion: "Col. Juárez / Roma, Cuauhtémoc, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Tratamiento de Adicciones, Constelaciones Familiares",
-    nivel: "Proveedorx",
-    lat: 19.4260, lng: -99.1630
-  },
-  {
-    nombre: "Eduardo García M.",
-    tel: "4422196719",
-    web: "www.centrodepsicoterapia.mx",
-    casos: "Individual, Pareja",
-    modalidad: "Online, Presencial",
-    ubicacion: "Querétaro",
-    ciudad: "Querétaro",
-    idiomas: "",
-    especialidad: "Terapia de pareja (EFT, Gottman), Gestalt relacional, Acompañamiento filosófico",
-    nivel: "Estudiante",
-    lat: 20.5888, lng: -100.3899
-  },
-  {
-    nombre: "Irene Valdés Villarreal Miranda",
-    tel: "7771142010",
-    web: "",
-    casos: "Individual, Adolescentes, Niños",
-    modalidad: "Online, Presencial, A domicilio",
-    ubicacion: "San Pedro de los Pinos, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Hakomi, EMDR somático, Teoría Polivagal, BodyMindMovement, trauma complejo",
-    nivel: "Practicante certificadx",
-    lat: 19.3810, lng: -99.1890
-  },
-  {
-    nombre: "Marian de Alba",
-    tel: "5543428443",
-    web: "",
-    casos: "Individual, Familia, Adolescentes",
-    modalidad: "Online, Presencial",
-    ubicacion: "Poniente, CDMX",
-    ciudad: "CDMX",
-    idiomas: "Inglés",
-    especialidad: "Logoterapia / Terapia Existencial",
-    nivel: "Estudiante",
-    lat: 19.3850, lng: -99.2500
-  },
-  {
-    nombre: "Daycira Janneth Sánchez Chávez",
-    tel: "8241003894",
-    web: "http://psicoterapiaintegrativa.com.mx/",
-    casos: "Individual, Adolescentes",
-    modalidad: "Online, Presencial",
-    ubicacion: "Monterrey, Nuevo León",
-    ciudad: "Monterrey",
-    idiomas: "",
-    especialidad: "Psicoanálisis Lacaniano, TFT, Psiconeuroinmunología, Neurodivergencias",
-    nivel: "Estudiante",
-    lat: 25.6432, lng: -100.3898
-  }
-];
+const SHEET_ID = '17hVV_Vq0UkPSsBMLayDaxL-qXmwlsDH8nsPjesA48BI';
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
+
+// Coordenadas de ciudades para entradas sin CP
+const CIUDAD_COORDS = {
+  'cdmx': [19.370, -99.180],
+  'ciudad de mexico': [19.370, -99.180],
+  'guadalajara': [20.660, -103.350],
+  'monterrey': [25.643, -100.390],
+  'puebla': [19.041, -98.206],
+  'queretaro': [20.589, -100.390],
+  'querétaro': [20.589, -100.390],
+  'veracruz': [19.452, -96.968],
+  'coatepec': [19.452, -96.968],
+  'oaxaca': [17.067, -96.720],
+  'cancun': [21.162, -86.852],
+  'cancún': [21.162, -86.852],
+  'merida': [20.967, -89.593],
+  'mérida': [20.967, -89.593],
+  'torreon': [25.543, -103.407],
+  'torreón': [25.543, -103.407],
+  'ciudad juarez': [31.730, -106.485],
+  'ciudad juárez': [31.730, -106.485],
+  'durango': [24.028, -104.653],
+  'morelos': [18.924, -99.222],
+  'tepoztlan': [18.985, -99.098],
+  'tepoztlán': [18.985, -99.098],
+  'valle de bravo': [19.192, -100.130],
+  'san pedro garza garcia': [25.660, -100.392],
+  'san pedro garza garcía': [25.660, -100.392],
+};
 
 // ============================================================
 // MAPA
 // ============================================================
-const map = L.map('map', {
-  center: [23.0, -102.0],
-  zoom: 5,
-  zoomControl: true
-});
-
+const map = L.map('map', { center: [23.0, -102.0], zoom: 5 });
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
   maxZoom: 18
 }).addTo(map);
 
@@ -972,33 +475,25 @@ function crearIcono(nivel) {
     <circle cx="16" cy="16" r="7" fill="white" opacity="0.9"/>
     <circle cx="16" cy="16" r="4" fill="${color}"/>
   </svg>`;
-  return L.divIcon({
-    html: svg,
-    className: '',
-    iconSize: [32, 40],
-    iconAnchor: [16, 40],
-    popupAnchor: [0, -40]
-  });
+  return L.divIcon({ html: svg, className: '', iconSize: [32, 40], iconAnchor: [16, 40], popupAnchor: [0, -40] });
 }
 
 function getWebUrl(web) {
   if (!web) return null;
   if (web.startsWith('http')) return web;
   if (web.startsWith('www.')) return 'https://' + web;
-  if (web.startsWith('@')) return null;
   return null;
 }
 
 function crearPopup(t) {
   const webUrl = getWebUrl(t.web);
-  const modalidadTags = t.modalidad.split(',').map(m => m.trim()).filter(Boolean).map(m => {
+  const nombreEsc = (t.nombre || '').replace(/'/g, "\\'");
+  const modalidadTags = (t.modalidad || '').split(',').map(m => m.trim()).filter(Boolean).map(m => {
     const cls = m.toLowerCase().includes('online') ? 'tag-online' :
                 m.toLowerCase().includes('presencial') ? 'tag-presencial' : 'tag-domicilio';
     return `<span class="tag ${cls}">${m}</span>`;
   }).join('');
-
   const idiomaTag = t.idiomas ? `<span class="tag tag-idioma">🌐 ${t.idiomas}</span>` : '';
-
   return `
     <div class="popup-header">
       <div class="popup-name">${t.nombre}</div>
@@ -1009,8 +504,7 @@ function crearPopup(t) {
         <div class="popup-section-label">Modalidad</div>
         <div class="popup-tags">${modalidadTags}</div>
       </div>
-      ${t.especialidad ? `
-      <div class="popup-section">
+      ${t.especialidad ? `<div class="popup-section">
         <div class="popup-section-label">Especialidad</div>
         <div class="popup-section-value">${t.especialidad}</div>
       </div>` : ''}
@@ -1024,56 +518,172 @@ function crearPopup(t) {
           ${t.nivel ? `<span class="tag" style="background:#F5F0E8;color:#2C3B2D;">🎓 ${t.nivel}</span>` : ''}
         </div>
       </div>
-      ${t.tel ? `
-      <div class="popup-section">
+      ${t.tel ? `<div class="popup-section">
         <div class="popup-section-label">Contacto</div>
-        <div class="popup-section-value">📞 <a href="tel:${t.tel}" onclick="gtag('event','clic_telefono',{nombre:'${t.nombre.replace(/'/g,"\\'")}'})" style="color:var(--sage);text-decoration:none;">${t.tel}</a></div>
+        <div class="popup-section-value">📞 <a href="tel:${t.tel}" onclick="gtag('event','clic_telefono',{nombre:'${nombreEsc}'})" style="color:var(--sage);text-decoration:none;">${t.tel}</a></div>
       </div>` : ''}
-      ${webUrl ? `<a href="${webUrl}" target="_blank" class="popup-link" onclick="gtag('event','clic_web',{nombre:'${t.nombre.replace(/'/g,"\\'")}',url:'${webUrl}'})">🌐 Visitar sitio web ↗</a>` : ''}
-    </div>
-  `;
+      ${webUrl ? `<a href="${webUrl}" target="_blank" class="popup-link" onclick="gtag('event','clic_web',{nombre:'${nombreEsc}'})">🌐 Visitar sitio web ↗</a>` : ''}
+    </div>`;
 }
 
-let markers = [];
-let activeItem = null;
+// ============================================================
+// DATOS — leer CSV del Google Sheet
+// ============================================================
+function parseCSV(text) {
+  const rows = [];
+  let row = [], cell = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      if (inQuotes && text[i+1] === '"') { cell += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (c === ',' && !inQuotes) {
+      row.push(cell); cell = '';
+    } else if ((c === '\n' || c === '\r') && !inQuotes) {
+      if (c === '\r' && text[i+1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else {
+      cell += c;
+    }
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
 
-function crearMarcador(t, index) {
-  const marker = L.marker([t.lat, t.lng], { icon: crearIcono(t.nivel) })
-    .bindPopup(crearPopup(t), { maxWidth: 300 })
-    .addTo(map);
+function inferirCiudad(ubicacion) {
+  if (!ubicacion) return '';
+  const u = ubicacion.toLowerCase();
+  if (u.includes('cdmx') || u.includes('ciudad de méxico') || u.includes('ciudad de mexico')) return 'CDMX';
+  if (u.includes('guadalajara') || u.includes('zapopan')) return 'Guadalajara';
+  if (u.includes('monterrey') || u.includes('san pedro garza')) return 'Monterrey';
+  if (u.includes('puebla')) return 'Puebla';
+  if (u.includes('querétaro') || u.includes('queretaro') || u.includes('tequisquiapan')) return 'Querétaro';
+  if (u.includes('veracruz') || u.includes('coatepec') || u.includes('xico,')) return 'Veracruz';
+  if (u.includes('oaxaca') || u.includes('mazunte')) return 'Oaxaca';
+  if (u.includes('cancún') || u.includes('cancun')) return 'Cancún';
+  if (u.includes('mérida') || u.includes('merida') || u.includes('yucatán')) return 'Mérida';
+  if (u.includes('torreón') || u.includes('torreon') || u.includes('coahuila')) return 'Torreón';
+  if (u.includes('juárez') || u.includes('juarez') || u.includes('chihuahua')) return 'Ciudad Juárez';
+  if (u.includes('durango')) return 'Durango';
+  if (u.includes('morelos') || u.includes('tepoztlán') || u.includes('tepoztlan')) return 'Morelos';
+  if (u.includes('valle de bravo')) return 'Estado de México';
+  return '';
+}
 
-  marker.on('click', () => {
-    activarItem(index);
-    gtag('event', 'clic_terapeuta', {
-      nombre: t.nombre,
-      ciudad: t.ciudad,
-      nivel: t.nivel || 'sin nivel',
-      fuente: 'pin_mapa'
-    });
+function coordsPorCiudad(ciudad) {
+  const key = ciudad.toLowerCase();
+  return CIUDAD_COORDS[key] || null;
+}
+
+// Geocoding por CP vía Nominatim (con caché en localStorage)
+const geocache = JSON.parse(localStorage.getItem('geocache_se') || '{}');
+
+async function geocodificarCP(cp) {
+  if (geocache[cp]) return geocache[cp];
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?postalcode=${cp}&country=MX&format=json&limit=1`,
+      { headers: { 'Accept-Language': 'es' } }
+    );
+    const data = await r.json();
+    if (data[0]) {
+      // Add small jitter so overlapping CPs don't stack exactly
+      const coords = [
+        parseFloat(data[0].lat) + (Math.random() - 0.5) * 0.008,
+        parseFloat(data[0].lon) + (Math.random() - 0.5) * 0.008
+      ];
+      geocache[cp] = coords;
+      localStorage.setItem('geocache_se', JSON.stringify(geocache));
+      return coords;
+    }
+  } catch(e) {}
+  return null;
+}
+
+async function cargarDatos() {
+  setLoading('Leyendo directorio...', 5);
+  const resp = await fetch(CSV_URL);
+  const text = await resp.text();
+  const rows = parseCSV(text);
+  if (rows.length < 2) return [];
+
+  // Col indices: 0=Timestamp,1=Gen,2=Nombre,3=Tel,4=Web,5=Casos,6=Modal,7=Ubicacion,8=CP,9=Idiomas,10=Nivel,11=Especialidad
+  const datos = rows.slice(1).filter(r => r[2]?.trim());
+
+  // Deduplicar: quedarse con la entrada más reciente por nombre
+  const porNombre = new Map();
+  datos.forEach(r => {
+    const nombre = r[2].trim();
+    if (!porNombre.has(nombre)) porNombre.set(nombre, r);
+    else {
+      // Comparar timestamps: el más reciente gana
+      const existing = porNombre.get(nombre);
+      if (new Date(r[0]) > new Date(existing[0])) porNombre.set(nombre, r);
+    }
   });
 
-  return marker;
-}
+  const terapeutas = [...porNombre.values()].map(r => ({
+    nombre: r[2]?.trim() || '',
+    tel: r[3]?.trim() || '',
+    web: r[4]?.trim() || '',
+    casos: r[5]?.trim() || '',
+    modalidad: r[6]?.trim() || '',
+    ubicacion: r[7]?.trim() || '',
+    cp: (r[8]?.trim() || '').replace(/\D/g, ''),
+    idiomas: r[9]?.trim() || '',
+    nivel: r[10]?.trim() || '',
+    especialidad: r[11]?.trim() || '',
+    ciudad: inferirCiudad(r[7]?.trim() || ''),
+    lat: null,
+    lng: null
+  }));
 
-function activarItem(index) {
-  // Highlight sidebar item
-  document.querySelectorAll('.therapist-item').forEach(el => el.classList.remove('active'));
-  const item = document.querySelector(`[data-index="${index}"]`);
-  if (item) {
-    item.classList.add('active');
-    item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // Geocodificar
+  const total = terapeutas.length;
+  let geocoded = 0;
+  const needNominatim = terapeutas.filter(t => t.cp && t.cp.length === 5 && !geocache[t.cp]);
+
+  for (let i = 0; i < terapeutas.length; i++) {
+    const t = terapeutas[i];
+    setLoading(`Ubicando terapeutas (${i+1}/${total})...`, 10 + Math.round((i/total)*85));
+
+    if (t.cp && t.cp.length === 5) {
+      const coords = await geocodificarCP(t.cp);
+      if (coords) { t.lat = coords[0]; t.lng = coords[1]; geocoded++; continue; }
+    }
+    // Fallback: coordenadas por ciudad
+    const coords = coordsPorCiudad(t.ciudad);
+    if (coords) {
+      t.lat = coords[0] + (Math.random() - 0.5) * 0.04;
+      t.lng = coords[1] + (Math.random() - 0.5) * 0.04;
+      geocoded++;
+    }
+
+    // Pausa entre llamadas Nominatim para no exceder el rate limit
+    if (needNominatim.includes(t)) await new Promise(r => setTimeout(r, 1100));
   }
-  activeItem = index;
+
+  return terapeutas;
 }
 
-// Poblar filtro de ciudades
+function setLoading(msg, pct) {
+  document.getElementById('loading-msg').textContent = msg;
+  document.getElementById('loading-bar').style.width = pct + '%';
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+let allTerapeutas = [];
+let markers = [];
+
 function poblarCiudades() {
-  const ciudades = [...new Set(terapeutas.map(t => t.ciudad).filter(Boolean))].sort();
+  const ciudades = [...new Set(allTerapeutas.map(t => t.ciudad).filter(Boolean))].sort();
   const sel = document.getElementById('filterCiudad');
+  sel.innerHTML = '<option value="">Todas</option>';
   ciudades.forEach(c => {
     const opt = document.createElement('option');
-    opt.value = c;
-    opt.textContent = c;
+    opt.value = c; opt.textContent = c;
     sel.appendChild(opt);
   });
 }
@@ -1087,16 +697,15 @@ function applyFilters() {
   markers.forEach(m => map.removeLayer(m));
   markers = [];
   document.getElementById('list-container').innerHTML = '';
-
   let visible = 0;
 
-  terapeutas.forEach((t, i) => {
-    const matchModalidad = !modalidad || t.modalidad.toLowerCase().includes(modalidad.toLowerCase());
-    const matchCiudad = !ciudad || t.ciudad === ciudad;
-    const matchIdioma = !idioma || t.idiomas.toLowerCase().includes(idioma.toLowerCase());
-    const matchNivel = !nivel || t.nivel.includes(nivel);
-
-    if (matchModalidad && matchCiudad && matchIdioma && matchNivel) {
+  allTerapeutas.forEach((t, i) => {
+    if (!t.lat || !t.lng) return;
+    const matchMod  = !modalidad || t.modalidad.toLowerCase().includes(modalidad.toLowerCase());
+    const matchCity = !ciudad || t.ciudad === ciudad;
+    const matchLang = !idioma || t.idiomas.toLowerCase().includes(idioma.toLowerCase());
+    const matchNiv  = !nivel || t.nivel.includes(nivel);
+    if (matchMod && matchCity && matchLang && matchNiv) {
       markers.push(crearMarcador(t, i));
       agregarALista(t, i);
       visible++;
@@ -1106,9 +715,26 @@ function applyFilters() {
   document.getElementById('counter').textContent = `${visible} terapeuta${visible !== 1 ? 's' : ''}`;
 }
 
+function crearMarcador(t, index) {
+  const marker = L.marker([t.lat, t.lng], { icon: crearIcono(t.nivel) })
+    .bindPopup(crearPopup(t), { maxWidth: 300 })
+    .addTo(map);
+  marker.on('click', () => {
+    activarItem(index);
+    gtag('event', 'clic_terapeuta', { nombre: t.nombre, ciudad: t.ciudad, nivel: t.nivel || 'sin nivel', fuente: 'pin_mapa' });
+  });
+  return marker;
+}
+
+function activarItem(index) {
+  document.querySelectorAll('.therapist-item').forEach(el => el.classList.remove('active'));
+  const item = document.querySelector(`[data-index="${index}"]`);
+  if (item) { item.classList.add('active'); item.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+}
+
 function agregarALista(t, index) {
   const container = document.getElementById('list-container');
-  const modalidadTags = t.modalidad.split(',').map(m => m.trim()).filter(Boolean).map(m => {
+  const modalidadTags = (t.modalidad || '').split(',').map(m => m.trim()).filter(Boolean).map(m => {
     const cls = m.toLowerCase().includes('online') ? 'tag-online' :
                 m.toLowerCase().includes('presencial') ? 'tag-presencial' : 'tag-domicilio';
     return `<span class="tag ${cls}">${m}</span>`;
@@ -1120,22 +746,13 @@ function agregarALista(t, index) {
   el.innerHTML = `
     <div class="therapist-name">${t.nombre}</div>
     <div class="therapist-location">📍 ${t.ubicacion}</div>
-    <div class="therapist-tags">${modalidadTags}${t.idiomas ? `<span class="tag tag-idioma">🌐 ${t.idiomas}</span>` : ''}</div>
-  `;
+    <div class="therapist-tags">${modalidadTags}${t.idiomas ? `<span class="tag tag-idioma">🌐 ${t.idiomas}</span>` : ''}</div>`;
   el.onclick = () => {
     activarItem(index);
-    gtag('event', 'clic_terapeuta', {
-      nombre: t.nombre,
-      ciudad: t.ciudad,
-      nivel: t.nivel || 'sin nivel',
-      fuente: 'lista_lateral'
-    });
-    const allVisible = [...document.querySelectorAll('.therapist-item')];
-    const pos = allVisible.indexOf(el);
-    if (markers[pos]) {
-      map.setView(markers[pos].getLatLng(), 13, { animate: true });
-      markers[pos].openPopup();
-    }
+    gtag('event', 'clic_terapeuta', { nombre: t.nombre, ciudad: t.ciudad, nivel: t.nivel || 'sin nivel', fuente: 'lista_lateral' });
+    const allItems = [...document.querySelectorAll('.therapist-item')];
+    const pos = allItems.indexOf(el);
+    if (markers[pos]) { map.setView(markers[pos].getLatLng(), 13, { animate: true }); markers[pos].openPopup(); }
   };
   container.appendChild(el);
 }
@@ -1145,12 +762,21 @@ function trackFilter(tipo, valor) {
   gtag('event', 'uso_filtro', { tipo_filtro: tipo, valor_filtro: valor });
 }
 
-// Init
-poblarCiudades();
-applyFilters();
-
-// Sidebar subtitle
-document.getElementById('sidebar-sub').textContent = 'Haz clic en un pin o en un nombre';
+// ============================================================
+// INIT
+// ============================================================
+(async () => {
+  try {
+    allTerapeutas = await cargarDatos();
+    poblarCiudades();
+    setLoading('Listo', 100);
+    document.getElementById('loading-overlay').classList.add('hidden');
+    applyFilters();
+  } catch(e) {
+    document.getElementById('loading-msg').textContent = 'Error al cargar datos. Verifica que el Sheet sea público.';
+    console.error(e);
+  }
+})();
 </script>
 </body>
 </html>
