@@ -602,8 +602,12 @@ async function geocodificarCP(cp) {
 
 async function cargarDatos() {
   setLoading('Leyendo directorio...', 5);
+  console.log('Fetching:', CSV_URL);
   const resp = await fetch(CSV_URL);
+  console.log('Response status:', resp.status, resp.ok);
+  if (!resp.ok) throw new Error(`Sheet no accesible (status ${resp.status}). ¿Está en modo público?`);
   const text = await resp.text();
+  console.log('CSV preview:', text.slice(0, 200));
   const rows = parseCSV(text);
   if (rows.length < 2) return [];
 
@@ -773,7 +777,8 @@ function trackFilter(tipo, valor) {
     document.getElementById('loading-overlay').classList.add('hidden');
     applyFilters();
   } catch(e) {
-    document.getElementById('loading-msg').textContent = 'Error al cargar datos. Verifica que el Sheet sea público.';
+    document.getElementById('loading-msg').textContent = `Error: ${e.message}`;
+    document.getElementById('loading-bar').style.background = '#C17A54';
     console.error(e);
   }
 })();
