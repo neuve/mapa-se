@@ -471,10 +471,10 @@ function esparcirDuplicados(terapeutas) {
   });
   Object.values(grupos).forEach(grupo => {
     if (grupo.length < 2) return;
+    if (grupo.some(t => t.geoFallback)) return; // fallback ya tiene scatter propio
     grupo.sort((a, b) => a.nombre.localeCompare(b.nombre));
     const n = grupo.length;
-    const tieneCp = grupo.some(t => t.cp);
-    const r = tieneCp ? 0.0022 : 0.018; // ~250m para CP, ~2km para ciudad
+    const r = 0.0022; // ~250m para CPs duplicados
     grupo.forEach((t, i) => {
       const angulo = (2 * Math.PI * i) / n;
       t.lat += r * Math.cos(angulo);
@@ -698,11 +698,20 @@ async function cargarDatos() {
       const coords = await geocodificarCP(t.cp);
       if (coords) { t.lat = coords[0]; t.lng = coords[1]; geocoded++; continue; }
     }
-    // Fallback: coordenadas por ciudad (sin jitter — esparcirDuplicados lo maneja)
+    // Fallback: coordenadas por ciudad + scatter determinístico por nombre
     const coords = coordsPorCiudad(t.ciudad);
     if (coords) {
-      t.lat = coords[0];
-      t.lng = coords[1];
+      // Hash del nombre → offset único y consistente dentro del área de la ciudad
+      let h = 2166136261;
+      for (let i = 0; i < t.nombre.length; i++) {
+        h ^= t.nombre.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+      }
+      const dLat = (((h & 0xFFFF) / 65535) - 0.5) * 0.12;      // ~±6km
+      const dLng = ((((h >> 16) & 0xFFFF) / 65535) - 0.5) * 0.15;
+      t.lat = coords[0] + dLat;
+      t.lng = coords[1] + dLng;
+      t.geoFallback = true;
       geocoded++;
     }
 
