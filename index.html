@@ -460,7 +460,7 @@ const CIUDAD_COORDS = {
 };
 
 // Distribuye en círculo terapeutas que comparten coordenadas exactas
-// radio: ~200m = 0.002 grados
+// CP duplicado → radio ~250m | ciudad sin CP → radio ~2km
 function esparcirDuplicados(terapeutas) {
   const grupos = {};
   terapeutas.forEach(t => {
@@ -471,9 +471,10 @@ function esparcirDuplicados(terapeutas) {
   });
   Object.values(grupos).forEach(grupo => {
     if (grupo.length < 2) return;
-    grupo.sort((a, b) => a.nombre.localeCompare(b.nombre)); // orden consistente
+    grupo.sort((a, b) => a.nombre.localeCompare(b.nombre));
     const n = grupo.length;
-    const r = 0.0018; // ~200 metros
+    const tieneCp = grupo.some(t => t.cp);
+    const r = tieneCp ? 0.0022 : 0.018; // ~250m para CP, ~2km para ciudad
     grupo.forEach((t, i) => {
       const angulo = (2 * Math.PI * i) / n;
       t.lat += r * Math.cos(angulo);
