@@ -459,16 +459,27 @@ const CIUDAD_COORDS = {
   'Estado de México':[19.192, -100.130],
 };
 
-// Jitter determinístico — mismo nombre → mismo offset siempre
-function jitterDeterministico(nombre, escala) {
-  let h = 2166136261;
-  for (let i = 0; i < nombre.length; i++) {
-    h ^= nombre.charCodeAt(i);
-    h = Math.imul(h, 16777619) >>> 0;
-  }
-  const lat = (((h & 0xFF) / 255) - 0.5) * escala;
-  const lng = ((((h >> 8) & 0xFF) / 255) - 0.5) * escala;
-  return [lat, lng];
+// Distribuye en círculo terapeutas que comparten coordenadas exactas
+// radio: ~200m = 0.002 grados
+function esparcirDuplicados(terapeutas) {
+  const grupos = {};
+  terapeutas.forEach(t => {
+    if (t.lat == null) return;
+    const key = `${t.lat.toFixed(4)},${t.lng.toFixed(4)}`;
+    if (!grupos[key]) grupos[key] = [];
+    grupos[key].push(t);
+  });
+  Object.values(grupos).forEach(grupo => {
+    if (grupo.length < 2) return;
+    grupo.sort((a, b) => a.nombre.localeCompare(b.nombre)); // orden consistente
+    const n = grupo.length;
+    const r = 0.0018; // ~200 metros
+    grupo.forEach((t, i) => {
+      const angulo = (2 * Math.PI * i) / n;
+      t.lat += r * Math.cos(angulo);
+      t.lng += r * Math.sin(angulo);
+    });
+  });
 }
 
 // ============================================================
@@ -608,7 +619,9 @@ function coordsPorCiudad(ciudad) {
 }
 
 // Geocoding por CP vía Nominatim (con caché en localStorage)
-const geocache = JSON.parse(localStorage.getItem('geocache_se') || '{}');
+// v2 — limpia caché anterior si existe
+if (localStorage.getItem('geocache')) localStorage.removeItem('geocache');
+const geocache = JSON.parse(localStorage.getItem('geocache_se_v2') || '{}');
 
 async function geocodificarCP(cp) {
   if (geocache[cp]) return geocache[cp];
@@ -622,7 +635,7 @@ async function geocodificarCP(cp) {
       // Add small jitter so overlapping CPs don't stack exactly
       const coords = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
       geocache[cp] = coords;
-      localStorage.setItem('geocache_se', JSON.stringify(geocache));
+      localStorage.setItem('geocache_se_v2', JSON.stringify(geocache));
       return coords;
     }
   } catch(e) {}
@@ -684,12 +697,11 @@ async function cargarDatos() {
       const coords = await geocodificarCP(t.cp);
       if (coords) { t.lat = coords[0]; t.lng = coords[1]; geocoded++; continue; }
     }
-    // Fallback: coordenadas por ciudad
+    // Fallback: coordenadas por ciudad (sin jitter — esparcirDuplicados lo maneja)
     const coords = coordsPorCiudad(t.ciudad);
     if (coords) {
-      const [dLat, dLng] = jitterDeterministico(t.nombre, 0.04);
-      t.lat = coords[0] + dLat;
-      t.lng = coords[1] + dLng;
+      t.lat = coords[0];
+      t.lng = coords[1];
       geocoded++;
     }
 
@@ -697,6 +709,7 @@ async function cargarDatos() {
     if (needNominatim.includes(t)) await new Promise(r => setTimeout(r, 1100));
   }
 
+  esparcirDuplicados(terapeutas);
   return terapeutas;
 }
 
