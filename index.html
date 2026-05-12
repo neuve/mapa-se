@@ -423,32 +423,33 @@ const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=
 
 // Coordenadas de ciudades para entradas sin CP
 const CIUDAD_COORDS = {
-  'cdmx': [19.370, -99.180],
-  'ciudad de mexico': [19.370, -99.180],
-  'guadalajara': [20.660, -103.350],
-  'monterrey': [25.643, -100.390],
-  'puebla': [19.041, -98.206],
-  'queretaro': [20.589, -100.390],
-  'querétaro': [20.589, -100.390],
-  'veracruz': [19.452, -96.968],
-  'coatepec': [19.452, -96.968],
-  'oaxaca': [17.067, -96.720],
-  'cancun': [21.162, -86.852],
-  'cancún': [21.162, -86.852],
-  'merida': [20.967, -89.593],
-  'mérida': [20.967, -89.593],
-  'torreon': [25.543, -103.407],
-  'torreón': [25.543, -103.407],
-  'ciudad juarez': [31.730, -106.485],
-  'ciudad juárez': [31.730, -106.485],
-  'durango': [24.028, -104.653],
-  'morelos': [18.924, -99.222],
-  'tepoztlan': [18.985, -99.098],
-  'tepoztlán': [18.985, -99.098],
-  'valle de bravo': [19.192, -100.130],
-  'san pedro garza garcia': [25.660, -100.392],
-  'san pedro garza garcía': [25.660, -100.392],
+  'CDMX':           [19.370, -99.180],
+  'Guadalajara':    [20.660, -103.350],
+  'Monterrey':      [25.643, -100.390],
+  'Puebla':         [19.041, -98.206],
+  'Querétaro':      [20.589, -100.390],
+  'Veracruz':       [19.452, -96.968],
+  'Oaxaca':         [17.067, -96.720],
+  'Cancún':         [21.162, -86.852],
+  'Mérida':         [20.967, -89.593],
+  'Torreón':        [25.543, -103.407],
+  'Ciudad Juárez':  [31.730, -106.485],
+  'Durango':        [24.028, -104.653],
+  'Morelos':        [18.924, -99.222],
+  'Estado de México':[19.192, -100.130],
 };
+
+// Jitter determinístico — mismo nombre → mismo offset siempre
+function jitterDeterministico(nombre, escala) {
+  let h = 2166136261;
+  for (let i = 0; i < nombre.length; i++) {
+    h ^= nombre.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  const lat = (((h & 0xFF) / 255) - 0.5) * escala;
+  const lng = ((((h >> 8) & 0xFF) / 255) - 0.5) * escala;
+  return [lat, lng];
+}
 
 // ============================================================
 // MAPA
@@ -552,27 +553,38 @@ function parseCSV(text) {
 
 function inferirCiudad(ubicacion) {
   if (!ubicacion) return '';
-  const u = ubicacion.toLowerCase();
-  if (u.includes('cdmx') || u.includes('ciudad de méxico') || u.includes('ciudad de mexico')) return 'CDMX';
-  if (u.includes('guadalajara') || u.includes('zapopan')) return 'Guadalajara';
-  if (u.includes('monterrey') || u.includes('san pedro garza')) return 'Monterrey';
-  if (u.includes('puebla')) return 'Puebla';
-  if (u.includes('querétaro') || u.includes('queretaro') || u.includes('tequisquiapan')) return 'Querétaro';
-  if (u.includes('veracruz') || u.includes('coatepec') || u.includes('xico,')) return 'Veracruz';
+  const u = ubicacion.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, ''); // quitar acentos para comparar
+
+  // CDMX — alcaldías y referencias comunes
+  const cdmx = ['cdmx','ciudad de mexico','df ','el df','coyoacan','tlalpan',
+    'benito juarez','cuauhtemoc','miguel hidalgo','alvaro obregon',
+    'iztapalapa','iztacalco','azcapotzalco','xochimilco','tlahuac',
+    'venustiano carranza','gustavo a','napoles','condesa','roma norte',
+    'roma sur','polanco','santa fe','pedregal','san angel','del valle',
+    'narvarte','doctores','centro historico','tepito','coyoacan',
+    'villa coapa','xoco','anzures','lomas de chapultepec',
+    'bosques de las lomas','interlomas','ciudad universitaria'];
+  if (cdmx.some(k => u.includes(k))) return 'CDMX';
+
+  if (u.includes('guadalajara') || u.includes('zapopan') || u.includes('jalisco')) return 'Guadalajara';
+  if (u.includes('monterrey') || u.includes('san pedro garza') || u.includes('nuevo leon')) return 'Monterrey';
+  if (u.includes('puebla') || u.includes('cholula')) return 'Puebla';
+  if (u.includes('queretaro') || u.includes('tequisquiapan')) return 'Querétaro';
+  if (u.includes('veracruz') || u.includes('coatepec') || u.includes('xico')) return 'Veracruz';
   if (u.includes('oaxaca') || u.includes('mazunte')) return 'Oaxaca';
-  if (u.includes('cancún') || u.includes('cancun')) return 'Cancún';
-  if (u.includes('mérida') || u.includes('merida') || u.includes('yucatán')) return 'Mérida';
-  if (u.includes('torreón') || u.includes('torreon') || u.includes('coahuila')) return 'Torreón';
-  if (u.includes('juárez') || u.includes('juarez') || u.includes('chihuahua')) return 'Ciudad Juárez';
-  if (u.includes('durango')) return 'Durango';
-  if (u.includes('morelos') || u.includes('tepoztlán') || u.includes('tepoztlan')) return 'Morelos';
-  if (u.includes('valle de bravo')) return 'Estado de México';
+  if (u.includes('cancun') || u.includes('quintana roo')) return 'Cancún';
+  if (u.includes('merida') || u.includes('yucatan')) return 'Mérida';
+  if (u.includes('torreon') || u.includes('coahuila')) return 'Torreón';
+  if (u.includes('juarez') || u.includes('chihuahua')) return 'Ciudad Juárez';
+  if (u.includes('durango') || u.includes('gomez palacio')) return 'Durango';
+  if (u.includes('morelos') || u.includes('tepoztlan') || u.includes('cuernavaca')) return 'Morelos';
+  if (u.includes('valle de bravo') || u.includes('estado de mexico')) return 'Estado de México';
   return '';
 }
 
 function coordsPorCiudad(ciudad) {
-  const key = ciudad.toLowerCase();
-  return CIUDAD_COORDS[key] || null;
+  return CIUDAD_COORDS[ciudad] || null;
 }
 
 // Geocoding por CP vía Nominatim (con caché en localStorage)
@@ -588,10 +600,7 @@ async function geocodificarCP(cp) {
     const data = await r.json();
     if (data[0]) {
       // Add small jitter so overlapping CPs don't stack exactly
-      const coords = [
-        parseFloat(data[0].lat) + (Math.random() - 0.5) * 0.008,
-        parseFloat(data[0].lon) + (Math.random() - 0.5) * 0.008
-      ];
+      const coords = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
       geocache[cp] = coords;
       localStorage.setItem('geocache_se', JSON.stringify(geocache));
       return coords;
@@ -658,8 +667,9 @@ async function cargarDatos() {
     // Fallback: coordenadas por ciudad
     const coords = coordsPorCiudad(t.ciudad);
     if (coords) {
-      t.lat = coords[0] + (Math.random() - 0.5) * 0.04;
-      t.lng = coords[1] + (Math.random() - 0.5) * 0.04;
+      const [dLat, dLng] = jitterDeterministico(t.nombre, 0.04);
+      t.lat = coords[0] + dLat;
+      t.lng = coords[1] + dLng;
       geocoded++;
     }
 
