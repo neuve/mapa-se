@@ -619,29 +619,54 @@ function coordsPorCiudad(ciudad) {
   return CIUDAD_COORDS[ciudad] || null;
 }
 
-// Geocoding por CP vía Nominatim (con caché en localStorage)
-// v2 — limpia caché anterior si existe
-if (localStorage.getItem('geocache')) localStorage.removeItem('geocache');
-const geocache = JSON.parse(localStorage.getItem('geocache_se_v2') || '{}');
-
-async function geocodificarCP(cp) {
-  if (geocache[cp]) return geocache[cp];
-  try {
-    const r = await fetch(
-      `https://nominatim.openstreetmap.org/search?postalcode=${cp}&country=MX&format=json&limit=1`,
-      { headers: { 'Accept-Language': 'es' } }
-    );
-    const data = await r.json();
-    if (data[0]) {
-      // Add small jitter so overlapping CPs don't stack exactly
-      const coords = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-      geocache[cp] = coords;
-      localStorage.setItem('geocache_se_v2', JSON.stringify(geocache));
-      return coords;
-    }
-  } catch(e) {}
-  return null;
-}
+// Coordenadas pre-geocodificadas por terapeuta (generadas localmente con Nominatim)
+// Para nuevas entradas no reconocidas se usa inferirCiudad() como fallback
+const GEOCOORDS = {
+  'Patricio Michel Ruiz Abrín': [19.417282, -99.184682],
+  'PAOLA CELADA GLORIA': [20.616139, -100.383802],
+  'Martha Carpio': [19.403413, -99.233698],
+  'Elsa Peralta': [19.374689, -99.086003],
+  'Monique Tron': [19.451344, -99.074359],
+  'Daniela Fontaine López': [19.4535, -96.9676],
+  'Lorena Armida Gurrola Lopez': [24.021353, -104.650885],
+  'Rosa Leticia Couto Keever': [19.477358, -99.075479],
+  'Maria Kiekari': [19.460895, -96.958999],
+  'Hilda Martínez Vega': [20.5232, -99.895],
+  'Gabriela Valdés Villarreal': [25.573854, -103.367625],
+  'Liliana Díaz Jerezano': [19.394703, -99.089283],
+  'María de la Paz Pérez Carcova': [19.043762, -98.20038],
+  'Leticia Steiner Iracheta': [19.499033, -99.250922],
+  'Perla Guerra Ramos': [19.35, -99.16],
+  'Eduardo García M.': [20.551723, -100.435555],
+  'Mayra Fernanda Chavez Leal': [25.6571, -100.4032],
+  'Luz Elena Herrera Castañeda': [19.286427, -99.035179],
+  'Santiago Harris': [20.669811, -87.041106],
+  'Luz Elena  Herrera Castañeda': [19.286427, -99.035179],
+  'Miriam Fouilloux Meraz': [19.49571, -98.887143],
+  'Camila apaez rubio': [19.511989, -96.972628],
+  'Hilda Statz': [31.744504, -106.460526],
+  'Claudia Stepensky': [19.1927, -100.129409],
+  'Heather Anne Harper': [19.430246, -99.105696],
+  'Isabel de la Rosa Herrera': [19.399881, -99.194455],
+  'Samuel René Ruiz Valdespino': [19.439477, -100.357658],
+  'Luna Elizabeth Gomez Gordillo Ugalde': [19.470034, -99.077353],
+  'María  Pedalino Lara': [19.37332, -99.1376],
+  'Ana Elena Avalos Bosque': [19.420071, -99.113435],
+  'Claudia Gallegos Andrade': [19.279067, -99.127675],
+  'Bárbara López Ochoa': [19.409566, -99.171024],
+  'Regina Verduzco Gallo': [19.441163, -99.130285],
+  'Teté Oliva': [19.440442, -99.058594],
+  'Sandra Casale Rmz': [25.536426, -103.435658],
+  'Begoña Martínez Bas-Cristóbal': [19.383674, -99.173567],
+  'Paulina García Hubard': [19.481725, -99.095788],
+  'Ivette Dickinson Galicia': [19.43227, -99.186761],
+  'Fernanda López Portillo': [19.486221, -99.07725],
+  'Stefanie Tatiana Calderón Pichardo': [19.461045, -99.058411],
+  'Ana Luisa Luna López': [32.642995, -115.396303],
+  'Adriana de la Vega Zamacona': [27.752203, -107.635325],
+  'Adriana Ordóñez Ortiz': [19.1927, -100.1294],
+  'Sofía Dávila Escudero': [19.451333, -99.084311],
+};
 
 async function cargarDatos() {
   setLoading('Leyendo directorio...', 5);
@@ -685,38 +710,39 @@ async function cargarDatos() {
     lng: null
   }));
 
-  // Geocodificar
-  const total = terapeutas.length;
-  let geocoded = 0;
-  const needNominatim = terapeutas.filter(t => t.cp && t.cp.length === 5 && !geocache[t.cp]);
-
-  for (let i = 0; i < terapeutas.length; i++) {
-    const t = terapeutas[i];
-    setLoading(`Ubicando terapeutas (${i+1}/${total})...`, 10 + Math.round((i/total)*85));
-
-    if (t.cp && t.cp.length === 5) {
-      const coords = await geocodificarCP(t.cp);
-      if (coords) { t.lat = coords[0]; t.lng = coords[1]; geocoded++; continue; }
-    }
-    // Fallback: coordenadas por ciudad + scatter determinístico por nombre
-    const coords = coordsPorCiudad(t.ciudad);
+  // Asignar coordenadas: lookup instantáneo en GEOCOORDS, fallback por ciudad para entradas nuevas
+  setLoading('Ubicando terapeutas...', 50);
+  const newEntries = [];
+  terapeutas.forEach(t => {
+    const coords = GEOCOORDS[t.nombre];
     if (coords) {
-      // Hash del nombre → offset único y consistente dentro del área de la ciudad
-      let h = 2166136261;
-      for (let i = 0; i < t.nombre.length; i++) {
-        h ^= t.nombre.charCodeAt(i);
-        h = Math.imul(h, 16777619) >>> 0;
+      t.lat = coords[0];
+      t.lng = coords[1];
+    } else {
+      // Nuevo terapeuta no en la tabla: fallback por ciudad + scatter determinístico
+      const cityCoords = coordsPorCiudad(t.ciudad);
+      if (cityCoords) {
+        let h = 2166136261;
+        for (let j = 0; j < t.nombre.length; j++) { h ^= t.nombre.charCodeAt(j); h = Math.imul(h, 16777619) >>> 0; }
+        t.lat = cityCoords[0] + (((h & 0xFFFF) / 65535) - 0.5) * 0.12;
+        t.lng = cityCoords[1] + ((((h >> 16) & 0xFFFF) / 65535) - 0.5) * 0.15;
+        t.geoFallback = true;
       }
-      const dLat = (((h & 0xFFFF) / 65535) - 0.5) * 0.12;      // ~±6km
-      const dLng = ((((h >> 16) & 0xFFFF) / 65535) - 0.5) * 0.15;
-      t.lat = coords[0] + dLat;
-      t.lng = coords[1] + dLng;
-      t.geoFallback = true;
-      geocoded++;
+      newEntries.push(t);
     }
+  });
 
-    // Pausa entre llamadas Nominatim para no exceder el rate limit
-    if (needNominatim.includes(t)) await new Promise(r => setTimeout(r, 1100));
+  // Si hay entradas nuevas con CP, intentar Nominatim (sin bloquear las demás)
+  for (const t of newEntries.filter(t => t.cp && t.cp.length === 5)) {
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/search?postalcode=${t.cp}&country=MX&format=json&limit=1`,
+        { headers: { 'Accept-Language': 'es' } }
+      );
+      const data = await r.json();
+      if (data[0]) { t.lat = parseFloat(data[0].lat); t.lng = parseFloat(data[0].lon); t.geoFallback = false; }
+      await new Promise(res => setTimeout(res, 1100));
+    } catch(e) {}
   }
 
   esparcirDuplicados(terapeutas);
