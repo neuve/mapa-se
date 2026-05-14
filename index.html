@@ -404,6 +404,17 @@
       </select>
     </div>
     <div class="filter-group">
+      <span class="filter-label">Atiende</span>
+      <select id="filterCasos" onchange="trackFilter('casos', this.value); applyFilters()">
+        <option value="">Todos</option>
+        <option value="Individual">Individual</option>
+        <option value="Niños">Niños</option>
+        <option value="Adolescentes">Adolescentes</option>
+        <option value="Pareja">Pareja</option>
+        <option value="Familia">Familia</option>
+      </select>
+    </div>
+    <div class="filter-group">
       <span class="filter-label">Nivel SE</span>
       <select id="filterNivel" onchange="trackFilter('nivel_se', this.value); applyFilters()">
         <option value="">Todos</option>
@@ -775,6 +786,7 @@ function applyFilters() {
   const modalidad = document.getElementById('filterModalidad').value;
   const ciudad = document.getElementById('filterCiudad').value;
   const idioma = document.getElementById('filterIdioma').value;
+  const casos = document.getElementById('filterCasos').value;
   const nivel = document.getElementById('filterNivel').value;
 
   markers.forEach(m => map.removeLayer(m));
@@ -787,8 +799,9 @@ function applyFilters() {
     const matchMod  = !modalidad || t.modalidad.toLowerCase().includes(modalidad.toLowerCase());
     const matchCity = !ciudad || t.ciudad === ciudad;
     const matchLang = !idioma || t.idiomas.toLowerCase().includes(idioma.toLowerCase());
+    const matchCasos = !casos || t.casos.includes(casos);
     const matchNiv  = !nivel || t.nivel.includes(nivel);
-    if (matchMod && matchCity && matchLang && matchNiv) {
+    if (matchMod && matchCity && matchLang && matchCasos && matchNiv) {
       markers.push(crearMarcador(t, i));
       agregarALista(t, i);
       visible++;
